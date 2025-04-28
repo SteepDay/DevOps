@@ -1,0 +1,38 @@
+---
+- name: Локальное сканирование с NMAP
+  hosts: local
+  gather_facts: no
+
+  tasks:
+    - name: Проверить NMAP
+      ansible.builtin.command: which nmap
+      register: nmap_check
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Установить NMAP
+      become: true   # Требуются права root
+      ansible.builtin.apt:
+        name: nmap
+        state: present
+      when: nmap_check.rc != 0
+
+    - name: Загрузить цели сканирования
+      ansible.builtin.set_fact:
+        scan_targets: "{{ lookup('file', 'targets.txt').splitlines() }}"
+
+    - name: Выполнить сканирование
+      ansible.builtin.command: |
+        nmap -p 80 --open -oG - {{ item }}
+      loop: "{{ scan_targets }}"
+      register: scan_results
+      ignore_errors: yes
+
+    - name: Показать результаты
+      ansible.builtin.debug:
+        msg: |
+          Результат сканирования {{ item.item }}:
+          {{ item.stdout_lines | join('\n') }}
+      loop: "{{ scan_results.results }}"
+      loop_control:
+        label: "{{ item.item }}"  
